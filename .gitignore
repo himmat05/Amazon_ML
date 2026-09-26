@@ -1,0 +1,24 @@
+# Large datasets and outputs (>100MB exceeds GitHub limits)
+student_resource/dataset/
+student_resource/output/
+output/
+*.zip
+*.tsv
+*.csv
+
+# Python caches and logs
+__pycache__/
+*.pyc
+*.pyo
+catboost_info/
+__MACOSX/
+.DS_Store
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+env/
+.env
+
+# Allow model weights under 100MB
+!code/business_entity_resolution/src/matching_model.pkl
