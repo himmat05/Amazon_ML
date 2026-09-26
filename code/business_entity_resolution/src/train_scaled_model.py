@@ -32,14 +32,19 @@ def run_scaled_training(
     print("=" * 65)
     t0 = time.time()
 
-    # 1. Ingest S1 Training Entities & Ground Truth (from row 120,000 to avoid any val overlap)
-    skip_rows = 120000
-    print(f"Sampling {n_s1_train:,} training reference entities from {train_dir} (offset {skip_rows:,})...")
+    # 1. Ingest S1 Training Entities & Ground Truth (balanced US & India, offset 150,000)
+    skip_rows = 150000
+    print(f"Sampling {n_s1_train:,} balanced (US + India) training reference entities from {train_dir} (offset {skip_rows:,})...")
     s1_path = os.path.join(train_dir, "train_source1.tsv")
     gt_path = os.path.join(train_dir, "train_ground_truth.tsv")
 
-    # Read S1 sample
-    df_s1_sample = pd.read_csv(s1_path, sep="\t", skiprows=range(1, skip_rows), nrows=n_s1_train)
+    # Read balanced S1 sample
+    df_raw = pd.read_csv(s1_path, sep="\t", skiprows=range(1, skip_rows), nrows=n_s1_train * 2)
+    n_half = n_s1_train // 2
+    df_us = df_raw[df_raw["country"] == "US"].head(n_half)
+    df_in = df_raw[df_raw["country"] == "India"].head(n_half)
+    df_s1_sample = pd.concat([df_us, df_in], ignore_index=True).sample(frac=1.0, random_state=42).reset_index(drop=True)
+    del df_raw, df_us, df_in
     s1_ids_set = set(df_s1_sample["entity_id"])
 
     # Load GT mapping in 3.5 seconds

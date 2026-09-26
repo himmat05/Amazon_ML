@@ -160,6 +160,8 @@ class FeatureExtractor:
 
     def __init__(self):
         self.feature_names = FEATURE_NAMES
+        self._cached_pool_signature = None
+        self._cached_pool_lookup = None
 
     def extract_features_for_candidates(
         self,
@@ -169,8 +171,6 @@ class FeatureExtractor:
         gt_map: Optional[Dict[str, Set[str]]] = None,
     ) -> Tuple[np.ndarray, Optional[np.ndarray], List[Tuple[str, str]]]:
         """Convert candidate pairs into feature matrix X, binary targets y, and pair index list."""
-        print(f"Preparing lookup tables for {len(df_s1):,} S1 and {len(df_pool):,} candidate pool records...")
-
         # Fast S1 lookup dict using vectorized arrays
         s1_ids = df_s1["entity_id"].astype(str).values
         s1_cores = df_s1["core_name"].fillna("").astype(str).values
@@ -185,19 +185,26 @@ class FeatureExtractor:
             for i in range(len(s1_ids))
         }
 
-        # Fast Pool lookup dict using vectorized arrays
-        p_ids = df_pool["entity_id"].astype(str).values
-        p_cores = df_pool["core_name"].fillna("").astype(str).values
-        p_addrs = df_pool["clean_address"].fillna("").astype(str).values
-        p_sufs = df_pool["legal_suffix"].fillna("").astype(str).values
-        p_nums = [set(n.split(",")) if n else set() for n in df_pool["address_numbers"].fillna("").astype(str).values]
-        p_posts = df_pool["postal_code"].fillna("").astype(str).values
-        p_fulls = df_pool["blocking_text"].fillna("").astype(str).values
+        # Check if Pool lookup is already cached for this pool DataFrame
+        pool_sig = (len(df_pool), id(df_pool))
+        if self._cached_pool_signature == pool_sig and self._cached_pool_lookup is not None:
+            pool_lookup = self._cached_pool_lookup
+        else:
+            print(f"Preparing lookup tables for {len(df_pool):,} candidate pool records...")
+            p_ids = df_pool["entity_id"].astype(str).values
+            p_cores = df_pool["core_name"].fillna("").astype(str).values
+            p_addrs = df_pool["clean_address"].fillna("").astype(str).values
+            p_sufs = df_pool["legal_suffix"].fillna("").astype(str).values
+            p_nums = [set(n.split(",")) if n else set() for n in df_pool["address_numbers"].fillna("").astype(str).values]
+            p_posts = df_pool["postal_code"].fillna("").astype(str).values
+            p_fulls = df_pool["blocking_text"].fillna("").astype(str).values
 
-        pool_lookup = {
-            p_ids[i]: (p_cores[i], p_addrs[i], p_sufs[i], p_nums[i], p_posts[i], p_fulls[i])
-            for i in range(len(p_ids))
-        }
+            pool_lookup = {
+                p_ids[i]: (p_cores[i], p_addrs[i], p_sufs[i], p_nums[i], p_posts[i], p_fulls[i])
+                for i in range(len(p_ids))
+            }
+            self._cached_pool_signature = pool_sig
+            self._cached_pool_lookup = pool_lookup
 
         total_pairs = sum(len(cands) for cands in candidate_map.values())
         print(f"Extracting features for {total_pairs:,} candidate pairs...")

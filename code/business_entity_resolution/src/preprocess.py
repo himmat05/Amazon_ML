@@ -93,6 +93,13 @@ ADDRESS_ABBREVIATIONS = {
     r"\bnr\b": "near",
     r"\bb\/h\b": "behind",
     r"\bbd\b": "boulevard",  # French boulevard abbr
+    r"\br\b": "rue",
+    r"\bimp\b": "impasse",
+    r"\ball\b": "allee",
+    r"\bche\b": "chemin",
+    r"\brte\b": "route",
+    r"\bza\b": "zone activite",
+    r"\bzi\b": "zone industrielle",
 }
 
 RE_ADDRESS_STANDARDS = [

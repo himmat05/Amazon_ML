@@ -84,36 +84,65 @@ class EntityMatchingModel:
 
         if CatBoostClassifier is not None:
             t_cat = time.time()
-            print(f"Training CatBoost classifier on {len(X_train):,} candidate pairs...")
-            self.model_cat = CatBoostClassifier(
-                iterations=350,
-                learning_rate=0.05,
-                depth=6,
-                verbose=0,
-                random_seed=42,
-            )
-            eval_cat = (X_val, y_val) if X_val is not None and y_val is not None else None
-            self.model_cat.fit(X_train, y_train, eval_set=eval_cat, early_stopping_rounds=30)
-            print(f"CatBoost training completed in {time.time()-t_cat:.2f}s")
+            print(f"Training CatBoost classifier on {len(X_train):,} candidate pairs on NVIDIA GPU...")
+            try:
+                self.model_cat = CatBoostClassifier(
+                    iterations=500,
+                    learning_rate=0.04,
+                    depth=6,
+                    task_type="GPU",
+                    verbose=0,
+                    random_seed=42,
+                )
+                eval_cat = (X_val, y_val) if X_val is not None and y_val is not None else None
+                self.model_cat.fit(X_train, y_train, eval_set=eval_cat, early_stopping_rounds=40)
+                print(f"CatBoost GPU training completed in {time.time()-t_cat:.2f}s")
+            except Exception as e:
+                print(f"CatBoost GPU fallback to CPU: {e}")
+                self.model_cat = CatBoostClassifier(
+                    iterations=350,
+                    learning_rate=0.05,
+                    depth=6,
+                    verbose=0,
+                    random_seed=42,
+                )
+                self.model_cat.fit(X_train, y_train)
+                print(f"CatBoost CPU training completed in {time.time()-t_cat:.2f}s")
         else:
             self.model_cat = None
 
         if XGBClassifier is not None:
             t_xgb = time.time()
-            print(f"Training XGBoost classifier on {len(X_train):,} candidate pairs...")
-            self.model_xgb = XGBClassifier(
-                n_estimators=350,
-                learning_rate=0.05,
-                max_depth=6,
-                subsample=0.85,
-                colsample_bytree=0.85,
-                eval_metric="logloss",
-                tree_method="hist",
-                random_state=42,
-                n_jobs=-1,
-            )
-            self.model_xgb.fit(X_train, y_train)
-            print(f"XGBoost training completed in {time.time()-t_xgb:.2f}s")
+            print(f"Training XGBoost classifier on {len(X_train):,} candidate pairs on NVIDIA GPU (CUDA)...")
+            try:
+                self.model_xgb = XGBClassifier(
+                    n_estimators=500,
+                    learning_rate=0.04,
+                    max_depth=6,
+                    subsample=0.85,
+                    colsample_bytree=0.85,
+                    eval_metric="logloss",
+                    tree_method="hist",
+                    device="cuda",
+                    random_state=42,
+                )
+                self.model_xgb.fit(X_train, y_train)
+                print(f"XGBoost CUDA training completed in {time.time()-t_xgb:.2f}s")
+            except Exception as e:
+                print(f"XGBoost CUDA fallback to CPU: {e}")
+                self.model_xgb = XGBClassifier(
+                    n_estimators=350,
+                    learning_rate=0.05,
+                    max_depth=6,
+                    subsample=0.85,
+                    colsample_bytree=0.85,
+                    eval_metric="logloss",
+                    tree_method="hist",
+                    random_state=42,
+                    n_jobs=-1,
+                )
+                self.model_xgb.fit(X_train, y_train)
+                print(f"XGBoost CPU training completed in {time.time()-t_xgb:.2f}s")
         else:
             self.model_xgb = None
 
@@ -141,6 +170,12 @@ class EntityMatchingModel:
             weights.append(0.35)
             
         if getattr(self, "model_xgb", None) is not None:
+            if not getattr(self, "_xgb_device_cpu_set", False):
+                try:
+                    self.model_xgb.set_params(device="cpu")
+                    self._xgb_device_cpu_set = True
+                except Exception:
+                    pass
             preds.append(self.model_xgb.predict_proba(X)[:, 1])
             weights.append(0.25)
             

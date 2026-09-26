@@ -23,6 +23,7 @@ from preprocess import preprocess_dataframe
 from blocking import ScalableBlocker
 from features import FeatureExtractor
 from model import EntityMatchingModel
+from postprocess import apply_cross_source_transitivity
 
 
 def process_country_partition(
@@ -32,8 +33,8 @@ def process_country_partition(
     output_dir: str,
     model: EntityMatchingModel,
     extractor: FeatureExtractor,
-    batch_size: int = 15000,
-    max_candidates: int = 35,
+    batch_size: int = 20000,
+    max_candidates: int = 65,
     sample_s1: Optional[int] = None,
 ) -> Tuple[str, str, int, int, int]:
     """Process a single country partition with streaming pool ingestion and S1 batching."""
@@ -79,6 +80,12 @@ def process_country_partition(
         blocker.fit_pool(df_pool_clean)
     print(f"[{c_name}] Inverted index ready in {time.time()-t_index:.2f}s")
 
+    print(f"[{c_name}] Pre-indexing pool records for transitivity...")
+    p_ids = df_pool_clean["entity_id"].astype(str).values
+    p_cores = df_pool_clean["core_name"].fillna("").astype(str).values
+    p_addrs = df_pool_clean["clean_address"].fillna("").astype(str).values
+    part_pool_records = {p_ids[i]: (p_cores[i], p_addrs[i]) for i in range(len(p_ids))}
+
     # 3. Micro-batched S1 Processing
     part_match_file = os.path.join(output_dir, f"tmp_match_{c_name}.tsv")
     part_cand_file = os.path.join(output_dir, f"tmp_cand_{c_name}.tsv")
@@ -117,11 +124,19 @@ def process_country_partition(
                 )
                 if len(X) > 0:
                     probs = model.predict_probabilities(X)
-                    b_matching_map = model.predict_matches(
-                        probabilities=probs,
-                        pair_ids=pair_ids,
-                        s1_entity_ids=b_s1_ids,
-                        threshold=model.best_threshold,
+                    
+                    candidate_scores = defaultdict(list)
+                    for (sid, pid), p in zip(pair_ids, probs):
+                        candidate_scores[sid].append((pid, float(p)))
+                    for sid in b_s1_ids:
+                        if sid not in candidate_scores:
+                            candidate_scores[sid] = []
+
+                    b_matching_map = apply_cross_source_transitivity(
+                        candidate_scores=candidate_scores,
+                        pool_records=part_pool_records,
+                        high_conf_thresh=model.best_threshold,
+                        recovery_thresh=max(0.60, model.best_threshold - 0.12),
                     )
                 else:
                     b_matching_map = {sid: [] for sid in b_s1_ids}
@@ -273,8 +288,8 @@ def run_full_pipeline(
     test_dir: str,
     output_dir: str,
     model_path: str = "code/business_entity_resolution/src/matching_model.pkl",
-    batch_size: int = 15000,
-    max_candidates: int = 35,
+    batch_size: int = 20000,
+    max_candidates: int = 65,
     sample_s1_size: Optional[int] = None,
 ):
     """Run memory-safe, country-partitioned streaming pipeline."""
@@ -347,8 +362,8 @@ if __name__ == "__main__":
     parser.add_argument("--test-dir", default="student_resource/dataset/test", help="Test directory")
     parser.add_argument("--output-dir", default="output", help="Output directory")
     parser.add_argument("--model-path", default="code/business_entity_resolution/src/matching_model.pkl", help="Model path")
-    parser.add_argument("--batch-size", type=int, default=15000, help="S1 batch size")
-    parser.add_argument("--max-candidates", type=int, default=35, help="Max candidates per entity")
+    parser.add_argument("--batch-size", type=int, default=20000, help="S1 batch size")
+    parser.add_argument("--max-candidates", type=int, default=65, help="Max candidates per entity")
     parser.add_argument("--sample-s1", type=int, default=None, help="Optional sample limit")
 
     args = parser.parse_args()
