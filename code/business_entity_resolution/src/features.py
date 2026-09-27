@@ -18,7 +18,12 @@ GENERIC_ADDR_WORDS = {
     "court", "plaza", "building", "cross", "main", "first", "second", "third",
     "block", "phase", "sector", "near", "opp", "opposite", "behind", "beside",
     "above", "below", "dist", "taluk", "post", "village", "india", "state", "city",
-    "tower", "room", "dept", "highway", "expressway", "circle"
+    "tower", "room", "dept", "highway", "expressway", "circle",
+    "rue", "allee", "chemin", "impasse", "route", "cedex", "place", "zone",
+    "cours", "quai", "passage", "square", "lieu", "dit", "france", "paris",
+    "lyon", "marseille", "bordeaux", "toulouse", "lille", "nantes", "strasbourg",
+    "montpellier", "rennes", "reims", "saint", "sainte", "centre", "commercial",
+    "industrielle", "activite", "activites", "parc", "espace"
 }
 
 FEATURE_NAMES = [
